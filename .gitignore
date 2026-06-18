@@ -8,6 +8,11 @@ workspace/*
 # Dependencies
 node_modules/
 
+# Nix build outputs
+result
+result-*
+.direnv/
+
 # Build artifacts
 dist/
 src/dashboard/public/

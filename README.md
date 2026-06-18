@@ -83,6 +83,45 @@ Delta 计算发生在类型化的结构数据层，从各个数据源获取的�
 
 也可以[直接阅读我们的 Prompts](system-prompts)，它们的更新频率高于架构文档，能反映最新的设计意图。建议结合架构文档和 Prompts 一起阅读。
 
+## ❄️ Nix / NixOS
+
+本项目提供基于 [flake-parts](https://flake.parts/) 的 Nix flake，包含：
+
+- `packages.default` — 打包好的 CyberGroupmate 衍生（包含编译好的 native addon：`better-sqlite3`、`node-pty`、`sqlite-vec`，以及预构建的 Dashboard 静态资源）。
+- `overlays.default` — 使 `pkgs.cybergroupmate` 可用。
+- `homeModules.default` — Home Manager 模块，以严格加固的 systemd **user** service 运行（只赋予网络权限）。
+
+### 构建
+
+```bash
+nix build .#default
+./result/bin/cybergroupmate   # 需设置 CYBERGROUPMATE_WORKDIR 指向可写数据目录
+```
+
+### Home Manager 部署
+
+```nix
+# flake.nix
+inputs.cybergroupmate.url = "github:Archeb/CyberGroupmate";
+
+# 配置
+home-manager.sharedModules = [ cybergroupmate.homeModules.default ];
+services.cybergroupmate = {
+  enable = true;
+  # `settings` 与 config.yaml 的 schema 一一对应
+  settings.persona.name = "MyBot";
+  settings.llm_profiles.default = {
+    provider = "openai";
+    api_key = "sk-...";
+    model = "gpt-4o-mini";
+  };
+  # 可选：合并/覆盖生成的 systemd service 属性
+  extraSystemdService.Service.RestartSec = 10;
+};
+```
+
+该服务以严格加固运行：`ProtectSystem=strict`、`PrivateDevices`、`SystemCallFilter=@system-service`、`RestrictAddressFamilies=AF_INET/AF_INET6/AF_UNIX/AF_NETLINK` 等，仅保留网络权限。注意：`MemoryDenyWriteExecute` 被刻意留空——V8/tsx 的 JIT 需要 W^X 页面，开启会导致 Node.js 启动即崩。
+
 ## 🖥️ 本机原生运行
 
 原生运行不依赖 Docker，适合直接在 Linux 主机上常驻服务。运行时数据默认写入项目根目录下的 `workspace/`。
