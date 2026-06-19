@@ -120,7 +120,10 @@ services.cybergroupmate = {
 };
 ```
 
-该服务以严格加固运行：`ProtectSystem=strict`、`PrivateDevices`、`SystemCallFilter=@system-service`、`RestrictAddressFamilies=AF_INET/AF_INET6/AF_UNIX/AF_NETLINK` 等，仅保留网络权限。注意：`MemoryDenyWriteExecute` 被刻意留空——V8/tsx 的 JIT 需要 W^X 页面，开启会导致 Node.js 启动即崩。
+该服务以 systemd **user** service 运行，并尽最大可能加固：`SystemCallFilter=@system-service`、`RestrictAddressFamilies=AF_INET/AF_INET6/AF_UNIX/AF_NETLINK`、`NoNewPrivileges`、清空 capability 集等，仅保留网络与本地 IPC 能力。注意两点:
+
+1. 用户级 systemd 没有权限设置 mount namespace，所以 `ProtectSystem`/`PrivateDevices`/`ProtectHome` 这类指令被刻意省略——否则 systemd 会在 `NAMESPACE` 阶段报 `Operation not permitted` 并拒绝启动服务。因此 syscall 层面被锁死,但文件系统并未隔离(进程能看到运行用户能看到的一切)。若需要文件系统隔离,请改用系统级服务(例如 NixOS 的 `systemd.services`)。
+2. `MemoryDenyWriteExecute` 同样被刻意留空——V8/tsx 的 JIT 需要 W^X 页面,开启会导致 Node.js 启动即崩。
 
 ## 🖥️ 本机原生运行
 

@@ -16,9 +16,14 @@
 #                                            definition, so callers can tweak
 #                                            or override hardening / env / etc.
 #
-# The service is locked down as strictly as possible while still allowing
-# networking (which the bot needs to reach LLM + platform APIs). Everything
-# else — devices, kernel knobs, the rest of the filesystem — is denied.
+# The service is hardened with everything that works in a systemd *user*
+# service: syscall + address-family restriction (network + local IPC only),
+# `NoNewPrivileges`, capability dropping, and seccomp-based kernel-surface
+# blocks. The mount-namespace directives (`PrivateDevices`, `ProtectSystem`,
+# `ProtectHome`, ...) are intentionally omitted — the user manager lacks the
+# privileges to set them up and would fail to start the service. See the big
+# comment in the `Service` block below for the full rationale and the
+# resulting limitation (no filesystem isolation).
 {
   config,
   lib,
@@ -205,8 +210,26 @@ in
           KillSignal = "SIGTERM";
 
           # ─── Hardening ───
-          # Goal: grant *only* networking. Everything else (devices, kernel
-          # knobs, the rest of the filesystem, extra privileges) is denied.
+          #
+          # IMPORTANT: this is a systemd *user* service (Home Manager), so the
+          # user manager has no privileges to set up mount namespaces. That
+          # means the namespace/mount-based directives — `PrivateDevices`,
+          # `PrivateTmp`, `ProtectSystem`, `ProtectHome`, `ReadWritePaths`,
+          # `ProtectKernelTunables`, `ProtectKernelModules`,
+          # `ProtectControlGroups`, `ProtectProc`, `ProcSubset`, ... — would
+          # make systemd fail at the NAMESPACE step
+          # ("Failed to set up mount namespacing: Operation not permitted") and
+          # the service would never start. We therefore keep only the
+          # hardening that works unprivileged: seccomp-based syscall / address
+          # family restriction, capability dropping, and `NoNewPrivileges`.
+          #
+          # Consequence: the process's *syscall surface* is locked down to
+          # essentially "network + local IPC + standard service syscalls", and
+          # it cannot gain privileges — but its filesystem view is NOT isolated
+          # (it sees whatever the owning user sees). For full filesystem
+          # isolation you need a system service (e.g. a NixOS module under
+          # `systemd.services`); that's out of scope for a Home Manager user
+          # service.
 
           # No capabilities / no privilege escalation. Networking does not
           # require any Linux capability.
@@ -214,37 +237,20 @@ in
           CapabilityBoundingSet = [ "" ];
           AmbientCapabilities = [ "" ];
 
-          # Private device namespace. node-pty only needs `/dev/ptmx` + the
-          # per-PTY `/dev/pts/*` entries, both of which `PrivateDevices=yes`
-          # still provides.
-          PrivateDevices = true;
-          DevicePolicy = "closed";
-
-          # Private /tmp and IPC namespace; reclaim IPC on stop.
-          PrivateTmp = true;
-          PrivateIPC = true;
+          # Reclaim the user's SysV/POSIX IPC objects when the service stops.
           RemoveIPC = true;
 
-          # Filesystem: make the whole host tree read-only and grant write
-          # access to the data dir only.
-          ProtectSystem = "strict";
-          ProtectHome = "read-only";
-          ReadWritePaths = [ cfg.dataDir ];
-
-          # Kernel surfaces.
-          ProtectKernelTunables = true;
-          ProtectKernelModules = true;
-          ProtectKernelLogs = true;
-          ProtectControlGroups = true;
+          # Kernel surfaces that are enforced purely via seccomp (these work in
+          # a user service; the remount-based ones do not).
           ProtectClock = true;
           ProtectHostname = true;
-          ProtectProc = "invisible";
-          ProcSubset = "pid";
+          ProtectKernelLogs = true;
 
-          # Personality / realtime / setuid hardening.
+          # Personality / realtime / setuid / namespace hardening.
           LockPersonality = true;
           RestrictRealtime = true;
           RestrictSUIDSGID = true;
+          RestrictNamespaces = true;
 
           # Syscall allow-list. `@system-service` already includes all the
           # networking syscalls (`socket`, `connect`, `accept`, `bind`, ...),
