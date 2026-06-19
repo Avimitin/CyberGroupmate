@@ -33,6 +33,7 @@ import {
 } from "node:fs";
 import { join, resolve, relative } from "node:path";
 import { createLogger } from "./core/logger.js";
+import { getDataDir, dataPath, getWorkspaceDir } from "./core/paths.js";
 import { setGlobalTimezone, getGlobalTimezone } from "./core/timezone.js";
 import { TelegramAdapter } from "./adapter/telegram-adapter.js";
 import { DiscordAdapter } from "./adapter/discord-adapter.js";
@@ -157,10 +158,11 @@ const MCP_CONNECTIONS_PATH = join(DATA_DIR, "mcp-connections.json");
  * 确保数据目录结构存在
  */
 function ensureDataDirs(): void {
+    const workspaceDir = getWorkspaceDir();
     const dirs = [
-        DATA_DIR,
-        join(DATA_DIR, "tg-session"),
-        join(DATA_DIR, "dream-journal"),
+        workspaceDir,
+        join(workspaceDir, "tg-session"),
+        join(workspaceDir, "dream-journal"),
     ];
     for (const dir of dirs) {
         if (!existsSync(dir)) {
@@ -355,7 +357,7 @@ async function main(): Promise<void> {
     } | null = null;
 
     // ─── 自动检查并安装 Skills 依赖 ───
-    await installSkillsDependencies(join(process.cwd(), "workspace", "skills"));
+    await installSkillsDependencies(dataPath("workspace", "skills"));
 
     const sandboxPool = new SandboxPool({
         maxInstances: appConfig.subagent?.maxSandboxInstances ?? 5,
@@ -1078,7 +1080,7 @@ async function main(): Promise<void> {
         getActiveUserProfilesForChat: (chatId) => activeUserProfilesForDispatch.get(chatId),
         getQuoteOutput: (index) => metaSandbox?.getOutput(index),
         getHarnessManager: () => harnessManager,
-        workspaceRoot: process.cwd(),
+        workspaceRoot: getDataDir(),
         onTaskDispatched: (task) => {
             metricsInstance?.groupCollector.onAttend(task.chatId, "REPLY");
         },
@@ -1208,8 +1210,7 @@ async function main(): Promise<void> {
     let mcpServerInstance: { httpServer: import("node:http").Server; config: { port: number; authToken: string } } | null = null;
     {
         const { writeFileSync, unlinkSync } = await import("node:fs");
-        const { join } = await import("node:path");
-        const mcpInfoPath = join(process.cwd(), "workspace", "mcp-server-info.json");
+        const mcpInfoPath = dataPath("workspace", "mcp-server-info.json");
         try { unlinkSync(mcpInfoPath); } catch {}
         if (mcpServerEnabled) {
             const { startMcpServer, generateAuthToken } = await import("./mcp-server/index.js");
@@ -1217,7 +1218,7 @@ async function main(): Promise<void> {
             const mcpToken = appConfig.backgroundAgent?.mcpToken ?? generateAuthToken();
             try {
                 mcpServerInstance = await startMcpServer(
-                    { metaApi: metaApiContext, globalState, accumulator, sandboxPool, workspaceRoot: process.cwd() },
+                    { metaApi: metaApiContext, globalState, accumulator, sandboxPool, workspaceRoot: getDataDir() },
                     { port: mcpPort, authToken: mcpToken },
                 );
                 if (mcpServerInstance) {
@@ -1241,7 +1242,7 @@ async function main(): Promise<void> {
         const model = appConfig.backgroundAgent!.harnessModel ?? appConfig.backgroundAgent!.claudeModel;
         harnessManager = new HarnessManager({
             launcher,
-            workDir: process.cwd(),
+            workDir: getDataDir(),
             mcpUrl: `http://127.0.0.1:${mcpServerInstance.config.port}/mcp`,
             mcpToken: mcpServerInstance.config.authToken,
             persona: appConfig.persona,

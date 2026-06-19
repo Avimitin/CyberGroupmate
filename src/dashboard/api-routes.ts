@@ -12,6 +12,7 @@ import type { EventBridge } from "./event-bridge.js";
 import type { CodeActExecutor } from "../subagent/code-act-executor.js";
 import { refreshModuleRegistryCache } from "../subagent/code-act-executor.js";
 import { createLogger } from "../core/logger.js";
+import { getWorkspaceDir, projectPath } from "../core/paths.js";
 import { loadConfig, validateConfig, saveConfig } from "../core/config.js";
 import { DEFAULT_BANNED_WORDS } from "../core/banned-words.js";
 import { rateLimiter } from "../core/llm-rate-limiter.js";
@@ -37,7 +38,7 @@ import { extractAnimatedStickerFrames } from "../core/vision-processor.js";
 import type { MainAgentGlobalState } from "../subagent/types.js";
 
 const log = createLogger("dashboard-api");
-const SKILLS_ROOT = join(process.cwd(), "workspace", "skills");
+const SKILLS_ROOT = join(getWorkspaceDir(), "skills");
 const DEBUG_EXECUTION_LOCKS = new Set<string>();
 const dynamicStickerPreviewCache = new Map<string, { mtimeMs: number; buffer: Buffer }>();
 
@@ -202,7 +203,8 @@ function releaseDebugLock(key: string): void {
 }
 
 function readDebugDts(pathFromModulesRoot: string): { path: string; content: string } | null {
-    const path = join(process.cwd(), "src", "sandbox", "modules", pathFromModulesRoot);
+    // src/sandbox/modules 是只读资源(随包发布),必须走项目根而非 cwd。
+    const path = projectPath("src", "sandbox", "modules", pathFromModulesRoot);
     const content = readTextIfExists(path);
     return content ? { path: `file:///codeact-debug/${pathFromModulesRoot.replace(/\\/g, "/")}`, content } : null;
 }
@@ -237,7 +239,8 @@ function buildSubagentDebugTypeLibs(chatId: string): Array<{ path: string; conte
 }
 
 function buildMetaDebugTypeLibs(): Array<{ path: string; content: string }> {
-    const dirPath = join(process.cwd(), "src", "meta-sandbox", "meta-api", "modules");
+    // src/meta-sandbox/meta-api/modules 是只读资源(随包发布),必须走项目根而非 cwd。
+    const dirPath = projectPath("src", "meta-sandbox", "meta-api", "modules");
     if (!fs.existsSync(dirPath)) return [];
     return fs.readdirSync(dirPath)
         .filter((file) => file.endsWith(".d.ts"))

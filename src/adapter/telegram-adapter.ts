@@ -20,6 +20,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Long } from "@mtcute/node";
 import { isAllowedTelegramMtcutePassthroughMethod } from "../core/telegram-mtcute-passthrough.js";
+import { getWorkspaceDir, dataPath } from "../core/paths.js";
 
 const log = createLogger("telegram-adapter");
 
@@ -517,7 +518,7 @@ export class TelegramAdapter implements PlatformAdapter {
                         const { readFileSync, existsSync } = await import("node:fs");
                         const pathMod = await import("node:path");
                         // 相对路径基于 workspace 目录解析（与 sandbox worker CWD 一致）
-                        const workspaceDir = pathMod.join(process.cwd(), "workspace");
+                        const workspaceDir = getWorkspaceDir();
                         const resolvedPath = fileStr.startsWith("/") ? pathMod.resolve(fileStr) : pathMod.resolve(workspaceDir, fileStr);
                         if (!existsSync(resolvedPath)) {
                             throw new Error(`sendMedia: 文件不存在: ${resolvedPath}`);
@@ -549,7 +550,7 @@ export class TelegramAdapter implements PlatformAdapter {
                 const { readFileSync, existsSync, statSync } = await import("node:fs");
                 const pathMod = await import("node:path");
                 // 相对路径基于 workspace 目录解析（与 sandbox worker CWD 一致）
-                const workspaceDir = pathMod.join(process.cwd(), "workspace");
+                const workspaceDir = getWorkspaceDir();
                 const resolvedPath = filePath.startsWith("/") ? pathMod.resolve(filePath) : pathMod.resolve(workspaceDir, filePath);
 
                 if (!existsSync(resolvedPath)) {
@@ -870,7 +871,7 @@ export class TelegramAdapter implements PlatformAdapter {
                         const isLocalPath = fileStr.startsWith("/") || fileStr.startsWith("./") || fileStr.startsWith("../");
                         if (isLocalPath) {
                             // 相对路径基于 workspace 目录解析（与 sandbox worker CWD 一致）
-                            const workspaceDir = pathMod.join(process.cwd(), "workspace");
+                            const workspaceDir = getWorkspaceDir();
                             const resolvedPath = fileStr.startsWith("/") ? pathMod.resolve(fileStr) : pathMod.resolve(workspaceDir, fileStr);
                             if (!existsSync(resolvedPath)) {
                                 throw new Error(`sendMediaGroup: 文件不存在: ${resolvedPath}`);
@@ -1312,8 +1313,8 @@ export class TelegramAdapter implements PlatformAdapter {
 
     private localUploadPathCandidates(filePath: string): string[] {
         const candidates = [
-            path.isAbsolute(filePath) ? path.resolve(filePath) : path.resolve(process.cwd(), filePath),
-            path.resolve(process.cwd(), "workspace", filePath),
+            path.isAbsolute(filePath) ? path.resolve(filePath) : dataPath(filePath),
+            dataPath("workspace", filePath),
         ];
         return [...new Set(candidates)];
     }
@@ -1647,7 +1648,7 @@ export class TelegramAdapter implements PlatformAdapter {
             .update(`${sourcePath}:${stat.size}:${stat.mtimeMs}:${variant}`)
             .digest("hex")
             .slice(0, 16);
-        const outDir = path.resolve(process.cwd(), "workspace", "Downloads", "other", "tg-converted");
+        const outDir = dataPath("workspace", "Downloads", "other", "tg-converted");
         fs.mkdirSync(outDir, { recursive: true });
         const rawBase = path.basename(sourcePath, path.extname(sourcePath));
         const safeBase = rawBase.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "sticker";

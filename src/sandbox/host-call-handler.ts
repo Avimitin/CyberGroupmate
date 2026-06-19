@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { ensureCompositeId, getGroupModelKey, getPlatform, isValidCompositeChatId } from "../core/chat-id.js";
+import { getWorkspaceDir } from "../core/paths.js";
 import {
     loadConfig,
     resolveComponentProfiles,
@@ -533,7 +534,8 @@ export function createSandboxHostCallHandler(chatId: string, deps: CreateSandbox
             if (!imagePaths || imagePaths.length === 0) {
                 throw new Error("vision.see() 至少需要传入一个图片路径");
             }
-            const workspaceRoot = resolve("workspace");
+            // workspace/ 是可写数据目录,从 getWorkspaceDir()(= getDataDir()/workspace)解析。
+            const workspaceRoot = getWorkspaceDir();
             const visionConfigs = resolveComponentProfiles("vision");
 
             const results = await Promise.all(imagePaths.map(async (userPath) => {

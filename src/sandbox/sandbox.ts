@@ -17,6 +17,7 @@ import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { createLogger } from "../core/logger.js";
 import { loadConfig } from "../core/config.js";
+import { getWorkspaceDir, dataPath } from "../core/paths.js";
 import { getAgentSkillScriptDirs } from "./skill-loader.js";
 import * as pty from "node-pty";
 import { normalizeProgrammaticTimestamps } from "../core/timezone.js";
@@ -35,16 +36,20 @@ function shellQuote(value: string): string {
 }
 
 export function buildEnhancedShellPath(projectRoot: string, existingPath: string): string {
-    const skillsBinDir = join(projectRoot, "workspace", "skills", "node_modules", ".bin");
-    const workspaceBinDir = join(projectRoot, "workspace", "node_modules", ".bin");
-    const globalBinDir = join(projectRoot, "workspace", "bin");
-    const localBinDir = join(projectRoot, "workspace", ".local", "bin");
+    // workspace/* 是可写数据目录,必须从 getDataDir() 解析,绝不用只读的 projectRoot。
+    // projectRoot 参数仅保留以兼容已有调用方签名,实际定位 workspace 走 getWorkspaceDir()。
+    void projectRoot;
+    const workspaceDir = getWorkspaceDir();
+    const skillsBinDir = join(workspaceDir, "skills", "node_modules", ".bin");
+    const workspaceBinDir = join(workspaceDir, "node_modules", ".bin");
+    const globalBinDir = join(workspaceDir, "bin");
+    const localBinDir = join(workspaceDir, ".local", "bin");
     const pathEntries = [
         existsSync(localBinDir) ? localBinDir : "",
         existsSync(globalBinDir) ? globalBinDir : "",
         existsSync(skillsBinDir) ? skillsBinDir : "",
         existsSync(workspaceBinDir) ? workspaceBinDir : "",
-        ...getAgentSkillScriptDirs(projectRoot),
+        ...getAgentSkillScriptDirs(),
         existingPath,
     ].filter(Boolean);
 
@@ -290,9 +295,13 @@ export class Sandbox extends EventEmitter {
         for (const key of this.hostOnlyKeys) {
             delete env[key];
         }
-        // ctx 持久化路径：per-chat 状态文件（隐藏在 sessions/.sandbox-state/ 下）
+        // ctx 持久化路径：per-chat 状态文件（隐藏在 sessions/.sandbox-state/ 下）。
+        // 可写数据,必须挂在 getDataDir()/workspace 下,不能用只读的 projectRoot。
         const safeChatId = this.chatId.replace(/[^a-zA-Z0-9_\-\.]/g, "_");
-        env.SANDBOX_CTX_PATH = join(this.projectRoot, "workspace", "sessions", ".sandbox-state", safeChatId, "ctx.json");
+        env.SANDBOX_CTX_PATH = dataPath("workspace", "sessions", ".sandbox-state", safeChatId, "ctx.json");
+        // skills 目录(可写)绝对路径:worker 的 cwd 是 workspace/,无法用 cwd 推 data 根,
+        // 因此由 host 显式注入,与 SANDBOX_CTX_PATH 同一模式。
+        env.SANDBOX_SKILLS_DIR = join(getWorkspaceDir(), "skills");
 
         // MCP Server 预配置（config.yaml → 环境变量 → Worker）
         const config = loadConfig();
@@ -319,7 +328,9 @@ export class Sandbox extends EventEmitter {
             throw new Error(`tsx runtime not found at ${tsxCliPath}. Did you run npm install?`);
         }
 
-        const workspaceDir = join(this.projectRoot, "workspace");
+        // workspace/ 是可写数据目录 -> 从 getDataDir() 解析(开发态 cwd 即源码根,行为不变)。
+        // workerPath/tsxCliPath 仍走 projectRoot,因为它们是只读资源(src/、node_modules/)。
+        const workspaceDir = getWorkspaceDir();
         if (!existsSync(workspaceDir)) {
             mkdirSync(workspaceDir, { recursive: true });
         }
@@ -402,7 +413,8 @@ export class Sandbox extends EventEmitter {
     private ensureShellSetup(): void {
         if (this.bashrcPath) return; // 已初始化
 
-        this.shellHome = join(this.projectRoot, "workspace");
+        // shell home = workspace 根(可写)。从 getWorkspaceDir() 解析。
+        this.shellHome = getWorkspaceDir();
         if (!existsSync(this.shellHome)) {
             mkdirSync(this.shellHome, { recursive: true });
         }
@@ -413,7 +425,8 @@ export class Sandbox extends EventEmitter {
         const enhancedPath = buildEnhancedShellPath(this.projectRoot, existingPath);
 
         const safeDirName = this.chatId.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const sandboxStateDir = join(this.projectRoot, "workspace", "sessions", ".sandbox-state", safeDirName);
+        // sandbox-state 存可写会话状态,挂在 getDataDir()/workspace 下。
+        const sandboxStateDir = dataPath("workspace", "sessions", ".sandbox-state", safeDirName);
         if (!existsSync(sandboxStateDir)) {
             mkdirSync(sandboxStateDir, { recursive: true });
         }

@@ -20,7 +20,7 @@ import { resolveComponentTimeout } from "../core/config.js";
 import { formatMessages, type RawMessage } from "../core/message-enricher.js";
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dataPath } from "../core/paths.js";
 import { loadPromptFile, registerCacheClear } from "../core/prompt-loader.js";
 import type {
     TopicNode,
@@ -585,7 +585,7 @@ export async function runReflection(
 
     // ── Step 6: 追加反思记录到 agent-state ──
     try {
-        const AGENT_STATE_PATH = join(process.cwd(), "workspace", "agent-state.md");
+        const AGENT_STATE_PATH = dataPath("workspace", "agent-state.md");
 
         const reflectionEntry = [
             `\n## Reflection ${startTime}`,

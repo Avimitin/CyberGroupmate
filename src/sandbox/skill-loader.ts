@@ -13,12 +13,13 @@
  */
 
 import { readFileSync, existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
-import { pathToFileURL, fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { parseDtsFile } from "./dts-parser.js";
 import { createLogger } from "../core/logger.js";
+import { getDataDir } from "../core/paths.js";
 import type { ModuleEntry } from "./modules/module-registry.js";
 
 const log = createLogger("skill-loader");
@@ -46,10 +47,15 @@ function toSafeSkillName(str: string): string {
     if (/^[0-9]/.test(name)) name = "_" + name;
     return name;
 }
-/** 基于源码位置定位项目根（src/sandbox/skill-loader.ts → 项目根），不依赖 process.cwd() */
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = resolve(__dirname, "../..");
-const SKILLS_DIR = resolve(PROJECT_ROOT, "workspace/skills");
+/** workspace/skills 目录(可写数据)。
+ *
+ * skill-loader 同时被 host 与 worker 进程加载:
+ *   - host:  cwd == 数据根,getDataDir() 直接可用;
+ *   - worker:cwd == workspace/,无法用 cwd 推数据根,因此由 host 通过
+ *            SANDBOX_SKILLS_DIR 环境变量显式注入(与 SANDBOX_CTX_PATH 同模式)。
+ * 绝不能用 __dirname 推资源根 —— 那是只读安装目录,会导致写操作 EACCES。
+ */
+const SKILLS_DIR = process.env.SANDBOX_SKILLS_DIR || resolve(getDataDir(), "workspace", "skills");
 
 export interface LoadedSkill {
     /** Sandbox 中注入的 JS 变量名。保留 name 字段兼容旧调用方。 */
@@ -279,7 +285,7 @@ function createSkillMdModuleEntry(skill: DiscoveredSkill): ModuleEntry | null {
  * 返回所有包含 scripts/ 子目录的 AgentSkill 路径列表。
  * 用于将 Skill 脚本目录加入 shell PATH。
  */
-export function getAgentSkillScriptDirs(projectRoot: string = process.cwd()): string[] {
+export function getAgentSkillScriptDirs(projectRoot: string = getDataDir()): string[] {
     const skillsDir = resolve(projectRoot, "workspace/skills");
     if (!existsSync(skillsDir)) return [];
 

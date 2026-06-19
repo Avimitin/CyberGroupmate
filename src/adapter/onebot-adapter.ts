@@ -23,6 +23,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { dataPath, getWorkspaceDir } from "../core/paths.js";
 
 const log = createLogger("onebot-adapter");
 
@@ -733,7 +734,7 @@ export class OneBotAdapter implements PlatformAdapter {
                     // 实际是 GIF，复制为 .gif 扩展名
                     const stat = statSync(resolvedPath);
                     const hash = createHash("sha1").update(`${resolvedPath}:${stat.size}:${stat.mtimeMs}:rename-gif`).digest("hex").slice(0, 16);
-                    const outDir = path.resolve(process.cwd(), "workspace", "Downloads", "other", "qq-converted");
+                    const outDir = dataPath("workspace", "Downloads", "other", "qq-converted");
                     mkdirSync(outDir, { recursive: true });
                     const outPath = path.join(outDir, `${path.basename(resolvedPath, path.extname(resolvedPath))}_${hash}.gif`);
                     if (!existsSync(outPath)) {
@@ -794,7 +795,7 @@ export class OneBotAdapter implements PlatformAdapter {
             .update(`${sourcePath}:${stat.size}:${stat.mtimeMs}:anim-gif`)
             .digest("hex")
             .slice(0, 16);
-        const outDir = path.resolve(process.cwd(), "workspace", "Downloads", "other", "qq-converted");
+        const outDir = dataPath("workspace", "Downloads", "other", "qq-converted");
         mkdirSync(outDir, { recursive: true });
         const outPath = path.join(outDir, `${path.basename(sourcePath, path.extname(sourcePath))}_${hash}.gif`);
         if (existsSync(outPath)) {
@@ -886,7 +887,7 @@ export class OneBotAdapter implements PlatformAdapter {
             .update(`${sourcePath}:${stat.size}:${stat.mtimeMs}:${mimeType}`)
             .digest("hex")
             .slice(0, 16);
-        const outDir = path.resolve(process.cwd(), "workspace", "Downloads", "other", "qq-converted");
+        const outDir = dataPath("workspace", "Downloads", "other", "qq-converted");
         mkdirSync(outDir, { recursive: true });
         const outPath = path.join(outDir, `${path.basename(sourcePath, path.extname(sourcePath))}_${hash}${ext}`);
         if (!existsSync(outPath)) {
@@ -903,7 +904,7 @@ export class OneBotAdapter implements PlatformAdapter {
             .update(`${sourcePath}:${stat.size}:${stat.mtimeMs}:${suffix}`)
             .digest("hex")
             .slice(0, 16);
-        const outDir = path.resolve(process.cwd(), "workspace", "Downloads", "other", "qq-converted");
+        const outDir = dataPath("workspace", "Downloads", "other", "qq-converted");
         mkdirSync(outDir, { recursive: true });
         const outExt = isGif ? ".gif" : ".png";
         const outPath = path.join(outDir, `${path.basename(sourcePath, path.extname(sourcePath))}_${hash}_w200${outExt}`);
@@ -1509,7 +1510,7 @@ export class OneBotAdapter implements PlatformAdapter {
 
     private resolveWorkspacePath(filePath: string): string {
         if (filePath.startsWith("/")) return path.resolve(filePath);
-        const workspaceDir = path.join(process.cwd(), "workspace");
+        const workspaceDir = getWorkspaceDir();
         return path.resolve(workspaceDir, filePath);
     }
 

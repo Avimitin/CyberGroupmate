@@ -9,25 +9,12 @@
 
 import { readFileSync, existsSync, writeFileSync, unlinkSync, readdirSync, statSync, mkdirSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
-import { fileURLToPath } from "node:url";
 import { createLogger } from "./logger.js";
+import { getProjectRoot, getDataDir } from "./paths.js";
 
 const log = createLogger("prompt-loader");
 
 // ─── 路径解析 ───
-
-let _projectRoot: string | null = null;
-
-function getProjectRoot(): string {
-    if (_projectRoot) return _projectRoot;
-    try {
-        const thisFile = fileURLToPath(import.meta.url);
-        _projectRoot = join(dirname(thisFile), "..", "..");
-    } catch {
-        _projectRoot = process.cwd();
-    }
-    return _projectRoot;
-}
 
 /** 原始 system-prompts 目录 */
 function getBaseDir(): string {
@@ -36,7 +23,7 @@ function getBaseDir(): string {
 
 /** Override 目录：workspace/system-prompts-overrides/ */
 function getOverrideDir(): string {
-    return join(getProjectRoot(), "workspace", "system-prompts-overrides");
+    return join(getDataDir(), "workspace", "system-prompts-overrides");
 }
 
 // ─── 公开 API ───

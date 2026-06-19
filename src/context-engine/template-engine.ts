@@ -12,9 +12,9 @@
 
 import { createLogger } from "../core/logger.js";
 import { loadPromptFile, registerCacheClear } from "../core/prompt-loader.js";
+import { getProjectRoot } from "../core/paths.js";
 import { readFileSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 const log = createLogger("template-engine");
 
@@ -48,13 +48,7 @@ export function setPromptDirectory(dir: string): void {
  */
 function getPromptDir(): string {
     if (_promptDir) return _promptDir;
-    try {
-        const thisFile = fileURLToPath(import.meta.url);
-        const projectRoot = join(dirname(thisFile), "..", "..");
-        return join(projectRoot, "system-prompts");
-    } catch {
-        return "system-prompts";
-    }
+    return join(getProjectRoot(), "system-prompts");
 }
 
 /**
@@ -130,4 +124,3 @@ export function renderTemplate(template: string, variables: Record<string, unkno
 
     return result.trim();
 }
-

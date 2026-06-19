@@ -15,6 +15,7 @@ import { createLogger } from "../core/logger.js";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, isAbsolute, resolve as pathResolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { dataPath } from "../core/paths.js";
 
 const log = createLogger("discord-adapter");
 
@@ -987,8 +988,8 @@ export class DiscordAdapter implements PlatformAdapter {
         const candidates = isAbsolute(raw)
             ? [pathResolve(raw)]
             : [
-                pathResolve(process.cwd(), raw),
-                pathResolve(process.cwd(), "workspace", raw),
+                dataPath(raw),
+                dataPath("workspace", raw),
             ];
 
         for (const candidate of candidates) {
